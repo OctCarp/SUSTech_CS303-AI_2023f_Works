@@ -1,0 +1,300 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with `a4paper' for UK/EU standard size
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+\usepackage{bm}
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\usepackage{graphicx}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+% Costume Style Begin
+\usepackage{enumitem}
+% Costume Style End
+
+% Operator Declaration Begin
+
+% Operator Declaration End
+
+\title{SUSTech CS303 2023 Fall Project1 Report}
+\author{Chunhui XU}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+\subsection{Problem Introduction}
+
+This project is originated from the age of information explosion. People are exposed to thousands of messages through our social network every day. But if only see one point of view, they will fall into an information cocoon. This project gives students a chance to simulate IEM problem: find the larger number of people either receive comprehensive information or remain obvious.
+
+
+In order to characterize, let a DAG be the model of information transmission chain, and there are two conflicting viewpoints. Each node has its own probability to accepts the two viewpoints respectively. The problem should find a group of initial nodes to spread viewpoints, and let the number of nodes that accept both viewpoints or remain neutral be maximum.
+
+\subsection{Work Purpose}
+
+In this project, we need:
+
+\begin{enumerate}
+    \item Understand how to model the IEM problem.
+    \item Find an efficient way to simulate and evaluate how good the initial nodes is.
+    \item Use greedy algorithm and evolutionary (or simulated annealing) algorithm to find the optimal solution to the IEM problem.
+\end{enumerate}
+
+
+After the above steps, we have a preliminary understanding of using AI to model problems and seek their answers.
+
+
+\section{Preliminary}
+
+This section is originated from Project requirements document.
+
+\subsection{Notation Definitions}
+
+\begin{itemize}
+    \item \textbf{Social Network: $G = (V, E)$}, where $V = \{v_1, \cdots , v_n\}$ represents the node set, and $E = V \times V$ represents the edges between nodes.
+    \item \textbf{Campaigns: $C = \{c_1, c_2\}$}, represents two campaigns; each campaign holds a viewpoint.
+    \item \textbf{Initial Seed Set: $I_i \subseteq V, i \in \{1, 2\}$} represents the initial seed set for campaigns $c_i$.
+    \item \textbf{Balanced Seed Set: $S_i \subseteq V, i \in \{1, 2\}$} represents the target seed set that you need to find for each campaign $c_i$.
+    \item \textbf{Budget: $k$} represents the size of the target seed set; $|S_1|+ |S_2| \leq k$.
+    \item \textbf{Diffusion Probability: $P_i = \{p^i_{(u,v)}|(u,v) \in E\}, i \in \{1, 2\}$} represents the edge weight associated with campaign $c_i$ where $p^i_{(u,v)}$ represents the  probability of node $u$ activating node $v$ under each campaign $c_i$.
+    \item \textbf{Explored Result: $r(U)$} represents the explore result of seed set $U$
+\end{itemize}
+
+
+\subsection{Simulation Model}
+
+The famous Independent Cascade (IC) model is used. Each node $v \in V$ has two possible states, inactive and active.
+
+
+\begin{itemize}
+    \item \emph{active}: adopts new information being propagated through the network
+    \item \emph{inactive}: has not adopted new information yet, two kinds:
+    \begin{enumerate}[label=\roman*]
+        \item Ever been attempted to be activated but NOT
+        \item Never been attempted to be activated 
+    \end{enumerate}
+\end{itemize}
+ 
+
+Each node can ONLY switch from inactive to active.
+
+
+The \textbf{active nodes} and \textbf{inactive nodes in \romannumeral 1} will be the explored seed set.
+
+
+\subsection{Result Expression}
+Given a social network $G = (V, E)$, two initial seed sets $I_1$ and $I_2$, and a budget $k$. The IEM is to find two balanced seed sets $S_1$ and $S_2$ , where $|S_1|+ |S_2| \leq k$ and maximize the balanced information exposure, i.e.,
+
+
+$$
+\max{\Phi (S_1, S_2)} = \max{\mathbb{E}[|V \setminus (r_1(I_1 \cup S_1)  \bigtriangleup r_2(I_2 \cup S_2))|]}
+$$
+$$
+\begin{aligned}
+& \text{s.t.} & & |S_1|+ |S_2| \leq k \\
+& & & S_1, S_2 \in V
+\end{aligned}
+$$
+
+
+\section{Methodology}
+
+\subsection{Greedy Algorithm}
+In greedy algorithm, we do these things:
+
+
+\begin{enumerate}
+    \item For $c_i, c_2$, prune the original image respectively: delete all edges with $p^i_{(u,v)}$ less than $10^{-7}$.
+    \item In the new graph, for each single node $i$, run the Monte Carlo Simulation for $c_1, c_2$, get node set $r_1(\{v_i\})$, $r_2(\{v_i\})$. Simulate three times for two campaigns respectively, take their intersection as the final result for this point.
+    \item Run the greedy algorithm as \textbf{Algorithm 1}, because we already got the $r(\{v\})$ for every  node and campaign, we have the estimate: $$\widehat{r_1(S_1 \cup \{v_i\})} = r_1(S_1) \cup r_i(\{v_i\})$$ So we can quickly calculate $\Phi(S_1 \cup \{v\}, S_2)$ using set operations. Same for $\Phi(S_1, S_2 \cup \{v\})$.
+    \item When $|S_1|+|S_2| = k$, or there's no new node can improve current $\Phi (S_1,S_2)$ the greedy algorithm terminate and return $S_1, S_2$.
+\end{enumerate}
+
+
+\begin{algorithm}
+\caption{IEM Greedy}\label{alg:cap}
+\begin{algorithmic}
+\Require $k > 0$
+\State $S_1, S_2 \gets \emptyset$
+\State $\Phi_{max} \gets \Phi(S_1, S_2)$
+\While{$|S_1| + |S_2| < k$}
+\State $v^*_1 \gets \arg \max_v(\Phi(S_1 \cup \{v\}, S_2) - \Phi(S_1, S_2))$
+\State $v^*_2 \gets \arg \max_v(\Phi(S_1, S_2 \cup \{v\}) - \Phi(S_1, S_2))$
+\If{$\Phi(S_1 \cup \{v^*_1\}, S_2) = \Phi(S_1, S_2 \cup \{v^*_2\}) = \Phi(S_1, S_2)$}
+    \State break;
+\ElsIf{$\Phi(S_1 \cup \{v^*_1\}, S_2) \geq \Phi(S_1, S_2 \cup \{v^*_2\})$}
+    \State $S_1 \gets S_1 \cup \{v^*_1\}$
+\Else
+    \State $S_2\gets S_2 \cup \{v^*_2\}$
+\EndIf
+\EndWhile
+\State Output $S_1, S_2$
+\end{algorithmic}
+\end{algorithm}
+
+We need $O(|V|+|E|)$ to simulate every single node, and $O(k|V|)$ for greedy algorithm. So the overall time complexity is $O(k|V|)$, where $V, E$ are from the pruned graph.
+
+\subsection{Evolutionary Algorithm}
+
+In evolutionary algorithm, we do these things:
+
+
+\begin{enumerate}
+    \item Same steps as greedy algorithm steps 1, 2.
+    \item Generate the initial population randomly. The core idea: sort the influence $|r(\{v\})|$ of individual nodes. The higher influence the node has, the greater probability the node will in the initial population.
+    \item Sort the item in population by $\Phi$ and keep the first larger half.
+    \item Use the first half, pick two parents, cross over them to generate two new sons, and mutate them if they have the opportunity.
+    \item Let the number of parents and new sons be same, then continue from step 3
+    \item After certain times from step 3 to 5, terminate and return item that have the largest $\Phi$ in current population.
+\end{enumerate}
+
+
+\begin{algorithm}
+\caption{IEM Evolutionary Main}\label{alg:cap}
+\begin{algorithmic}
+\Require $k > 0$, popNum
+\State $Pop \gets$ randomChioce() * popNum
+\For{$i: 1 \to iterations$}
+    \For{$i: 1 \to popNum/2$}
+        \State $son1, son2 \gets crossover(randomParents(Pop))$
+        \State $son1 \gets mutation(son1)$
+        \State $son2 \gets mutation(son2)$
+        \State $Pop \gets Pop \cup \{son1, son2\}$
+    \EndFor
+    \State $Pop \gets Sort by \Phi(S^i_1, S^2_1)$
+    \State $Pop = Pop[0: popNum/2]$
+\EndFor
+\State Output Pop[0]
+\end{algorithmic}
+\end{algorithm}
+
+In cross over part, I use single point, two points and uniform cross over. In mutation, I use flip bit mutation and exchange mutation.
+
+
+The data structure of item in population is two sets $(S^i_1, S^i_2)$, represent one situation of the two balanced seed set. If $|S^i_1|+|S^i_2|>k$, there $\Phi$ will be \textbf{negative} to mark it as invalid.
+
+
+Consider $n$ as size of population and $m$ as the iteration numbers. We need $O(|V|+|E|)$ to simulate every single node, $O(|V|\log |V|)$ pre-processing for the initial population, and $O(mn\log n)$ for evolutionary algorithm. So the overall time complexity is $O(mn\log n)$.
+
+\section{Experiments}
+
+\subsection{Test Environment}
+In this part, I use the OJ result. The hardware/software as follow:
+\begin{itemize}
+    \item Operation System: Debian 10
+    \item Server CPU: 2.2GHz * 2
+    \item Python version: 3.9.7
+\end{itemize}
+
+This algorithm can be evaluated as follows: when reaching the baseline, the shorter the time to get the result, the better
+
+\subsection{Greedy Experiments}
+
+\begin{table}[!ht]
+\centering
+\caption{Data Set of Greedy}
+\begin{tabular}{|l|c|c|c|c|c|} \hline
+Case & Nodes & Edges & k & Baseline & My OJ Time  \\ \hline
+1 & 475 & 13289 & 10 & 430 & 1s \\ \hline
+2 &	36742 &	49248 & 15 & 35900 & 75s \\ \hline
+3 & 36742 & 29248 & 15 & 35900 & 49s \\ \hline
+4 & 7115 & 103689 & & & 28s \\ \hline
+5 & 3454 & 32140 & & & 68s \\ \hline
+\end{tabular}
+\end{table}
+
+From this table, we can found that, if the nodes is large, the program will take long time, since it will traverse all nodes in each greedy process.
+
+If the $|V|$ get larger and larger but $k$ remain the same, the algorithm will take more time. So from this perspective, it is necessary to pick up effective nodes for greedy algorithms in advance.
+
+\subsection{Evolutionary Experiments}
+
+\begin{table}[!ht]
+\centering
+\caption{Data Set of Evolutionary}
+\begin{tabular}{|l|c|c|c|c|c|} \hline
+Case & Nodes & Edges & k & Baseline & My OJ Time  \\ \hline
+1 & 475 & 13289 & 10 & 415 & 5s \\ \hline
+2 &	13984 &	17319 & 14 & 13580  & 63s \\ \hline
+3 & 13984 & 17319 & 14 & 13580  & 45s \\ \hline
+4 & 3454 & 32140 & & & 221s \\ \hline
+5 & 3454 & 32140 & & & 116s \\ \hline
+\end{tabular}
+\end{table}
+
+From this table, we can found that, if the edges is large, the program will take long time, since it will need more iterations to generate and find the most effective node.
+
+If the $|V|$ and $|E|$ are very close, maybe there will be some nodes has significant influence, it will be more easier to hold the good point in population.
+
+
+\section{Conclusions}
+
+\subsection{Algorithm Evaluation}
+\subsubsection{Greedy Evaluation}
+\begin{itemize}
+    \item Advantages:
+    \begin{itemize}
+        \item The idea is simple and the code is easy to understand.
+        \item Obtained sufficiently effective results.
+    \end{itemize}
+\item Disadvantages:
+    \begin{itemize}
+        \item There are very few optimization parts of the algorithm, only pruning.
+        \item There is still a lot of room for improvement in terms of ultimate efficiency.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Evolutionary Evaluation}
+\begin{itemize}
+    \item Advantages:
+    \begin{itemize}
+        \item Because of the better initial population, the number of iterations can be lower.
+        \item Obtained high enough results.
+    \end{itemize}
+\item Disadvantages:
+    \begin{itemize}
+        \item The initial population generation takes more time
+        \item The generality to other problems needs to be improved.
+    \end{itemize}
+\end{itemize}
+
+
+\subsection{Algorithm Improvement}
+\subsubsection{Greedy Improvement}
+
+In greedy algorithm, I used a basic algorithm idea and got enough results to pass the review. However, there is still room for optimization as follows:
+
+\begin{itemize}
+    \item The criteria for filtering new nodes can be improved. For example, filter out all points with out-degree greater than a certain value and perform a greedy algorithm. This avoids wasting too much time by traversing all nodes.
+    \item More appropriate pruning can be dynamically selected: to avoid pruning too many edges to cause information loss , which will significantly reduce the accuracy of the algorithm.
+\end{itemize}
+
+\subsubsection{Evolutionary Improvement}
+
+In evolutionary algorithm, I chose a better initial population to achieve a higher base value. However, there is still room for optimization as follows:
+
+\begin{itemize}
+    \item Generate the initial population completely randomly: This enables solving more general problems, rather than using a some strategy.
+    \item Achieve more crossover and mutation processes: such as OX, PBX and Inversion mutation.
+    \item Implement more ways to select parents: Set more ways to assign weights to parents with different rankings.
+\end{itemize}
+
+
+\subsection{Learning summary}
+
+In this project, greedy algorithm and evolutionary algorithm were used to provide a solution to the IEM problem. I learned how to transform real world problems to abstract model. Finally, I try to use AI to solve the problem, and achieved the expected results.
+
+
+\end{document}
