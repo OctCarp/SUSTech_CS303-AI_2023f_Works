@@ -1,0 +1,10 @@
+# test
+/bakup/
+/demo/
+/test/
+/Project2Subtask1/bak_up
+/Project2Subtask3/test
+
+
+*.pkl
+*.zip
