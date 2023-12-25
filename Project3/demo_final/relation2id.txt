@@ -1,0 +1,7 @@
+film.film.star	0
+film.film.genre	1
+film.film.writer	2
+film.film.director	3
+film.film.rating	4
+film.film.language	5
+film.film.country	6
