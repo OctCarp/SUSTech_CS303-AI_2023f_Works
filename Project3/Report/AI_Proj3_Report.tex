@@ -1,0 +1,278 @@
+\documentclass[lettersize,journal]{IEEEtran}
+
+\usepackage{amsmath,amsfonts}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{array}
+\usepackage[caption=false,font=normalsize,labelfont=sf,textfont=sf]{subfig}
+\usepackage{textcomp}
+\usepackage{stfloats}
+\usepackage{url}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{cite}
+
+\hyphenation{op-tical net-works semi-conduc-tor IEEE-Xplore}
+% updated with editorial comments 8/9/2021
+
+\title{SUSTech CS303 2023 Fall Project3 Report}
+\author{Chunhui XU}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+\subsection{Problem Introduction}
+The problem studied in this project is the design of a Knowledge Graph(KG)-based Recommender System. This concept originates from the field of information filtering systems, which aim to predict and show user preferences for various items such as books, movies, or music.
+
+A KG-based Recommender System can be characterized as a system that utilizes knowledge graphs as auxiliary information to enhance the accuracy and explainability of recommendations. Knowledge graphs are heterogeneous graphs that represent entities and relationships between them. By integrating user and item information, these systems can capture the relationships between users and items, as well as user preferences, more accurately.
+
+\subsection{Purpose}
+
+The purpose of this project is to design an algorithm that can construct a KG-based Recommender System. The algorithm should be able to predict whether a user would be interested in an item that they have not encountered before, based on their previous likes and dislikes, as well as the knowledge graph. The performance of the algorithm will be evaluated based on its accuracy in making predictions.
+
+This project has real-world applications in various domains such as  online streaming platforms, and content recommendation systems. By providing personalized recommendations, KG-based Recommender Systems can enhance user experience and engagement, leading to increased user satisfaction and potentially higher sales or user retention for businesses. Also, it allows us to have a practical understanding of knowledge graphs.
+
+\section{Preliminary}
+
+\subsection{General Formulation (From Requirement Documentation)}
+
+Given an interaction record set $Y_{train}$, and a knowledge graph $\mathcal{G} = (V, E)$. For each interaction record $y_{uw} \in Y_{train}$, $u \in U$, $w \in W$, where $U$ is the user set and $W$ is the item set, it is a 0/1 value that represents whether the user is interested in the item or not, 1 means interested in and 0 means not. $\mathcal{G} = (V, E)$ is a knowledge graph about the items, $V$ is the entity set and $E$ is the relation set, which means that the entities in $V$ are items and something that is related to the items, and the relations in $E$ describe the relationship between the items or their attributes. Based on the given $Y_{train}$ and $\mathcal{G}$, we are asked to design a recommender system with a score function $f(u, w)$, which is used to predict the interest level from user $u$ to item $w$, the higher score means the higher interest level.
+
+There are two tasks in this project we need to do:
+
+\begin{enumerate}
+    \item Maximize the AUC metric of the score function $f(u, w)$ on a test dataset $Y_{test}$, i.e., 
+    $$\max_f \text{AUC}(f, Y_{test})$$
+    \item Maximize the nDCG@k metric of the score function $f(u, w)$ on a test dataset $Y_{test}$, while $k = 5$, i.e., 
+    $$\max_f \text{nDCG@}5(f, Y_{test})$$
+\end{enumerate}
+
+\subsection{IO Ananlyze}
+
+First, we need input:
+
+\begin{itemize}
+    \item Interaction record set $Y_{train}$
+    \item Knowledge graph $\mathcal{G}=(V,E)$
+\end{itemize}
+
+Then the requirement is to find a recommender system with a score function $f(u ,w)$, where $u$ is the user and $w$ is the item.
+
+Then we should:
+
+\textbf{In Click-Through-Rate (CTR) prediction task}, we need to find the possibility of a user is interested in a item.
+
+\textbf{In the Top-k recommendation task}, we need to find the Top $k$ favorite item of the $l$ users from $U_{test}$. We need to return a $l \times k$ matrix, indicate the top favorite result of each user.
+
+\section{Methodology}
+
+\subsection{Workflow}
+
+In this problem, we have these steps to do:
+
+\begin{enumerate}
+    \item Read the data and pre-process the data so that the relationship and data structure of knowledge graph can be established.
+    \item For each iteration, the training data is processed to obtain a batch of data, training is performed based on this batch of data, the loss is calculated, and the training loss is back-propagated. In this step, use Adam optimizer.
+    \item Repeat iterations for training.
+    \item For the trained model, each time data is input, give the corresponding score or top k ranking list.
+    \item Evaluate the model by AUG or nDG@k.
+\end{enumerate}
+
+\subsection{Algorithm}
+
+In this training process, we mainly use Adam Algorithm in \texttt{PyTorch}, as Algorithm 1.
+\begin{algorithm}
+\caption{Adam Optimizer}
+\begin{algorithmic}[1]
+\Require $\gamma$ (lr), $\beta_1$, $\beta_2$ (betas), $\theta_0$ (params), $f(\theta)$ (objective), $\lambda$ (weight decay), $amsgrad$, $maximize$
+\State $m_0 \gets 0$ (first moment)
+\State $v_0 \gets 0$ (second moment)
+\State $\widehat{v_0}^{max} \gets 0$
+\For {$t=1$ to $\ldots$}
+    \If{$maximize$}
+        \State $g_t \gets -\nabla_{\theta} f_t(\theta_{t-1})$
+    \Else
+        \State $g_t \gets \nabla_{\theta} f_t(\theta_{t-1})$
+    \EndIf
+    \If{$\lambda \neq 0$}
+        \State $g_t \gets g_t + \lambda \theta_{t-1}$
+    \EndIf
+    \State $m_t \gets \beta_1 m_{t-1} + (1 - \beta_1) g_t$
+    \State $v_t \gets \beta_2 v_{t-1} + (1-\beta_2) g^2_t$
+    \State $\widehat{m_t} \gets m_t / (1-\beta_1^t)$
+    \State $\widehat{v_t} \gets v_t / (1-\beta_2^t)$
+    \If{$amsgrad$}
+        \State $\widehat{v_t}^{max} \gets \mathrm{max}(\widehat{v_t}^{max}, \widehat{v_t})$
+        \State $\theta_t \gets \theta_{t-1} - \gamma \widehat{m_t} / (\sqrt{\widehat{v_t}^{max}} + \epsilon)$
+    \Else
+        \State $\theta_t \gets \theta_{t-1} - \gamma \widehat{m_t} / (\sqrt{\widehat{v_t}} + \epsilon)$
+    \EndIf
+\EndFor
+\State \textbf{return} $\theta_{t}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Algorithm Analyze}
+
+To be honest, because the Adam algorithm is relatively complex, the mathematical analysis about it is retrieved from the Internet:
+
+Assume that the time complexity of computing the gradient is O($g$), where $g$ is the number of parameters. In the Adam algorithm, batch gradient descent (Batch Gradient Descent) or mini-batch gradient descent (Mini-batch Gradient Descent) is usually used to calculate gradients. For batch gradient descent, each calculation of the gradient requires traversing the entire training set, so the time complexity is O($ng$), where $n$ is the size of the training set. To sum up, the time complexity of calculating the gradient can be O($ng$).
+
+\section{Experiments}
+
+\subsection{Task 1}
+
+\subsubsection{Evaluate Metrics}
+
+In AUC calculation, s. Suppose the samples of the test dataset $T_{test}$ can be split to  positive set $S$ and negative set $S'$ according to the ground truth, while all the samples in $S$ are positive samples and all the samples in $S'$ are negative samples. For a sample $s$, the score predicted will be marked as score($s$), then we can define the calculation process of AUC is shown below:
+
+$$
+AUC=\frac{\sum_{s \in S} \sum_{s' \in S'}I(s, s')}{|S| \times |S'|}
+$$
+
+where the function I is:
+
+$$
+I(s, s')=
+\left\{
+    \begin{aligned}
+        0 && \text{score(s)$<$score(s')}\\
+        0.5 && \text{score(s)$=$score(s')} \\
+        1 && \text{score(s)$>$score(s')}
+    \end{aligned}
+\right.
+$$
+
+\begin{enumerate}
+    \item Your Experimental results:
+    \item Try to find through the experiments:
+    \begin{itemize}
+        \item the effect of different models (if any) or algorithms
+        \item the effect of hyperparameters (if any).
+        \item Analyze the effect of different algorithms/models and hyperparameters if you have corresponding experiments.
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Task 2}
+
+\subsubsection{Evaluate Metrics}
+
+Suppose for the $i$-th user in $U_{test}$, according to the ground truth, there is a positive item set $S_i$, which contains all the items that the user $u$ is interested in.
+
+Assume the return matrix is $M$, we can define the calculation process of nDCG@$k$ as shown below and $k$ is set to 5 in this project:
+
+$$
+\text{nDCG@}k(f, Y_{test})=
+\frac{1}{l} \sum\limits_{i=1}^{l}
+\frac{\text{DCG}_i\text{@}k(S_i,M_ i)}
+{\text{iDCG}_i\text{@}k(S_i)}
+$$
+
+where $\text{iDCG}_i\text{@}k$ is the theoretical maximum value of $\text{DCG}_i\text{@}k$ when the ground truth for the $i$-th user is $S_i$. And $\text{DCG}_i\text{@}k$ is defined as
+
+$$
+\text{DCG}_i\text{@}(S_i, M_i)=
+\sum\limits_{j=1}^{k}
+\frac{I(S_i,M_{ij})}
+{\log_2(j+1)}
+$$
+
+$$
+\text{iDCG}_i\text{@}k(S_i)=
+\sum\limits_{j=1}^{\min{(k,|S_i|)}}
+\frac{1}
+{\log_2(j+1)}
+$$
+
+and $I(S_i, M_{ij})$ is:
+
+$$
+I(S_i,M_{ij})=
+\left\{
+    \begin{aligned}
+        1 && \text{$M_{ij}$ is in $S_i$}\\
+        0 && \text{$M_{ij}$ is not in $S_i$}
+    \end{aligned}
+\right.
+$$
+
+\subsection{Results}
+
+My final version until Dec. 26th has the evaluate value for demo:
+
+\begin{itemize}
+    \item \textit{batch\_size}: 256
+    \item \textit{eval\_batch\_size}: 1024
+    \item \textit{neg\_rate}: 1
+    \item \textit{emb\_dim}: 128
+    \item \textit{l1}: True
+    \item \textit{margin}: 70
+    \item \textit{learning\_rate}: 5e-3
+    \item \textit{weight\_decay}: 1e-2
+    \item \textit{epoch\_num}: 30
+\end{itemize}
+
+Result in demo: (0.81801, 0.090065)
+
+\begin{itemize}
+    \item AUG:
+    \item 
+\end{itemize}
+
+\subsection{hyperparameters}
+
+Origin (0.63591, 0.010230):
+
+\begin{itemize}
+    \item \textit{batch\_size}: 256
+    \item \textit{eval\_batch\_size}: 1024
+    \item \textit{neg\_rate}: 1
+    \item \textit{emb\_dim}: 128
+    \item \textit{l1}: False
+    \item \textit{margin}: 15
+    \item \textit{learning\_rate}: 1e-4
+    \item \textit{weight\_decay}: 0
+    \item \textit{epoch\_num}: 30
+\end{itemize}
+
+In this section, I change one hyperparameter once and give the result in (AUC, nDCG@k) from demo.
+
+\begin{itemize}
+    \item \textit{l1}: True (0.65162, 0.020763)
+    \item \textit{neg\_rate}: 1 (0.66344, 0.019459)
+    \item \textit{leaning\_rate}: 1e-3 (0.68068, 0.011561)
+    \item \textit{weight\_decay}: 1e-3 (0.60451, 0.005703),  1e-5(0.63496. 0.007695)
+    \item \textit{margin} 50 (0.65147, 0.018283), 70(0.65933, 0.024075)
+\end{itemize}
+
+Use the absolute sum for score is better than square, same as the project 2 subtask 2, Euclidean distance may not be the best solution.
+
+If I reduce the negative rate, the system will be better. It have more information about positive sample, it is suitable for a remommender system.
+
+Weight decay will cause the model to decline. It may be a problem with the number of iterations, resulting in the model having no chance of over-fitting and more possibilities of under-fitting.
+
+Higher margin have better accuracy in nDCG@k, because it appropriately increases the sensitivity of the data and makes the loss function more accurate.
+
+But these are just discrete analyses. When the parameters are combined together, there will be different effects. For example, a higher number of iterations combined with weight deca'yay will make the results more accurate.
+
+\section{Conclusion}
+
+\subsection{Model Comment}
+
+Overall, the KG-based RS has the significant advantages:
+\begin{itemize}
+    \item \textbf{Ability to incorporate diverse data sources}: Knowledge graphs can integrate data from various sources. This allows for a more comprehensive understanding of users' preferences and item characteristics, leading to better recommendations.
+    \item \textbf{Support for serendipitous recommendations}: Knowledge graphs can capture long-tail and niche information about items and users. This enables the discovery of unexpected and serendipitous recommendations that may not be apparent in traditional recommender systems.
+\end{itemize}
+
+\subsection{Further thoughts}
+
+By studying the combination of knowledge graph and recommender system, I realized that knowledge graph can provide richer semantic information for the recommender system. By matching user and item attributes with entities and relationships in the knowledge graph, items that match the user's interests and needs can be more accurately recommended.
+
+Maybe we can explore how to use technologies such as natural language processing and machine learning to automatically build and update knowledge graphs from large-scale text data to improve its coverage and practicality. For example, if a new relation appeared, how can we add the new head-relation-tail chain for the existed graph, that is, the recommender system can automatically extract deeper information from the knowledge graph.
+
+\end{document}
+
+
